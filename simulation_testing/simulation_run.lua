@@ -62,7 +62,7 @@ end)
 
 print(result)
 
-print("WAL directory:", fio.cwd())
+fiber.sleep(2)
 
 -- The main cycle
 fiber.create(function()
@@ -87,4 +87,12 @@ fiber.create(function()
 
         fiber.sleep(math.random(1, 2)) 
     end
+end)
+
+
+fiber.create(function()
+    print("[Replication Monitor] Started monitoring")
+
+    fiber.create(function(cg) replication_errors.run_replication_monitor(cg) end, cg)
+    
 end)
