@@ -7,11 +7,25 @@ local my_functions = require("my_functions")
 local crash_functions = require("crash_functions")
 local randomized_operations = require("randomized_operations")
 local random_cluster = require('random_cluster')
+local log_handling = require('log_handling')
 local fio = require('fio')
+local replication_errors = require("replication_errors")
+
+
+io.output(assert(io.open("wroking_log.log", "w")))
+
+function print(...)
+    local t = {}
+    for i = 1, select("#", ...) do
+        t[i] = tostring(select(i, ...))
+    end
+    io.write(table.concat(t, "\t"), "\n")
+end
+
 
 math.randomseed(os.time())
 random_cluster.clear_dirs_for_all_replicas()
-local cg = random_cluster.rand_cluster(5)
+local cg = random_cluster.rand_cluster(3)
 
 box.cfg {
     checkpoint_count = 2, 
@@ -27,7 +41,9 @@ for _, node in ipairs(cg.replicas) do
         return box.info.election.state
     end)
     print(string.format("Node %s is %s", node.alias, tostring(node_state)))
+    crash_functions.update_node_state(node, "active")
 end
+
 
 -- Finding the leader node
 local leader_node = cg.cluster:get_leader()
@@ -62,29 +78,73 @@ end)
 
 print(result)
 
-print("WAL directory:", fio.cwd())
 
 -- The main cycle
 fiber.create(function()
     while true do
-        local random_action = math.random(1, 10)
+        local random_action = math.random(1, 11)
 
-        if random_action < 8 then
-            randomized_operations.do_random_operation(my_functions.get_random_node(cg.replicas), "test", 10)
-        else 
+        if random_action < 5 then
+            local rw_operation = math.random(1, 10)
+            local operation
+            if rw_operation < 3 then
+                operation = randomized_operations.generate_random_read_operation(10)
+            else
+                operation = randomized_operations.generate_random_write_operation(10)
+            end
+            randomized_operations.execute_db_operation(my_functions.get_random_node(cg.replicas), "test", operation)
+        elseif random_action < 9 then
             local type_of_crashing = math.random(1, 3)
             if type_of_crashing == 1 then
-                crash_functions.stop_node(my_functions.get_random_node(cg.replicas), 5, 10)
+                local crash_node = crash_functions.get_random_nodes_for_crash(cg.replicas, nodes_activity_states, 1)
+                if crash_node ~= -1 then
+                    crash_functions.stop_node(
+                        crash_node[1], 
+                        5, 
+                        10
+                    )
+                end
 
             elseif type_of_crashing == 2 then
-                crash_functions.create_delay_to_write_operations(my_functions.get_random_node(cg.replicas), "test", 5, 10)
+                local crash_node = crash_functions.get_random_nodes_for_crash(cg.replicas, nodes_activity_states, 1)
+                if crash_node ~= -1 then
+                    crash_functions.create_delay_to_write_operations(
+                        crash_node[1], 
+                        "test", 
+                        5, 
+                        10
+                    )
+                end
 
             else 
-                crash_functions.break_connection_between_random_nodes(cg.replicas, initial_replication, 5, 10)
-    
-            end
+                local crash_nodes = crash_functions.get_random_nodes_for_crash(cg.replicas, nodes_activity_states, 2)
+                if crash_nodes ~= -1 then
+                    crash_functions.break_connection_between_two_nodes(
+                        crash_nodes, 
+                        initial_replication, 
+                        5, 
+                        10
+                    )
+                end
+            end    
         end
 
         fiber.sleep(math.random(1, 2)) 
     end
 end)
+
+
+
+print("[REPLICATION MONITOR] Started replication monitoring")
+
+fiber.create(function(cg) replication_errors.run_replication_monitor(cg) end, cg)
+
+print("[XLOG MONITOR] Started journals monitoring")
+
+fiber.create(function() 
+    while true do 
+        log_handling.compare_two_random_xlogs("./replicas_dirs") 
+        fiber.sleep(2)
+    end
+end)
+
