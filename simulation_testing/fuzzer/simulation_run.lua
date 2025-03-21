@@ -1,72 +1,31 @@
-local t = require('luatest')
-local cluster = require('luatest.replica_set')
-local server = require('luatest.server')
+package.path = package.path .. "../src/?.lua"
 local fiber = require('fiber')
-local net_box = require('net.box')
-local tools = require("tools")
-local crash_functions = require("crash_functions")
-local randomized_operations = require("randomized_operations")
-local random_cluster = require('random_cluster')
-local log_handling = require('log_handling')
-local proxy_handling = require('proxy_handling')
 local fio = require('fio')
+
+
+local crash_functions = require("crash_functions")
+local logger = require("logger")
+local fio_utils = require("fio_utils")
+local log_handling = require('log_handling')
+local random_cluster = require('random_cluster')
 local replication_errors = require("replication_errors")
-local clock = require('clock')
-logger = require('log')
-os.remove('working_log.log')
-logger.cfg { log = 'working_log.log' }
-
-
--- io.output(assert(io.open("working_log.log", "w")))
-
-
-function log_info(...)
-    -- Concatenate all arguments
-    local t = {}
-    for i = 1, select("#", ...) do
-        t[i] = tostring(select(i, ...))
-    end
-    local msg = table.concat(t, "\t")
-
-    -- log_info to stdout with a newline
-    logger.info(string.format("%s %s\n", t, msg))
-end
-
-function log_error(...)
-    -- Concatenate all arguments
-    local t = {}
-    for i = 1, select("#", ...) do
-        t[i] = tostring(select(i, ...))
-    end
-    local msg = table.concat(t, "\t")
-
-    -- log_info to stdout with a newline
-    logger.error(string.format("%s %s\n", t, msg))
-end
+local proxy_handling = require('proxy_handling')
+local tools = require("tools")
 
 
 math.randomseed(os.time())
-random_cluster.clear_dirs_for_all_replicas()
+
+SUCCESSFUL_LOGS = os.getenv("ENV_SUCCESSFUL_LOGS")
+Logger = logger.Logger
+logger.init_logger()
+
 local cg = random_cluster.rand_cluster(3)
 fiber.sleep(20)
 
---- Simulation run configuration
 
-local memtx_path = './memtx_dir'
 
-if fio.path.exists(memtx_path) then
-    fio.rmtree(memtx_path)
-end
-fio.mkdir(memtx_path)
 
-box.cfg {
-    checkpoint_count = 2,
-    memtx_use_mvcc_engine = true,
-    memtx_dir = memtx_path,
-    txn_isolation = 'best-effort'
-}
 
----
 
 local initial_replication = tools.get_initial_replication(cg.replicas)
 
@@ -75,14 +34,14 @@ for _, node in ipairs(cg.replicas) do
     local node_state = node:exec(function()
         return box.info.election.state
     end)
-    log_info(string.format("Node %s is %s", node.alias, tostring(node_state)))
+    LogInfo(string.format("Node %s is %s", node.alias, tostring(node_state)))
     crash_functions.update_node_state(node, "active")
 end
 
 -- Checking the initial configuration for proxies
 for _, proxy in ipairs(cg.proxies) do
     local proxy_state = proxy_handling.get_proxy_state(proxy) 
-    log_info(string.format("Proxy %s is %s", proxy.alias, tostring(proxy_state)))
+    LogInfo(string.format("Proxy %s is %s", proxy.alias, tostring(proxy_state)))
     crash_functions.update_node_state(proxy, "active")
 end
 
@@ -117,9 +76,9 @@ local result = leader_node:exec(function()
     return message
 end)
 
-log_info(result)
+LogInfo(result)
 
-log_info("[PERIODIC INSERT] Started")
+LogInfo("[PERIODIC INSERT] Started")
 log_handling.periodic_insert(
     cg,
     "test",
@@ -128,7 +87,7 @@ log_handling.periodic_insert(
     0.1
 )
 
-log_info("[DIVERGENCE MONITOR] Started")
+LogInfo("[DIVERGENCE MONITOR] Started")
 log_handling.divergence_monitor(
     cg,
     "test",
@@ -138,9 +97,9 @@ log_handling.divergence_monitor(
 )
 
 
-log_info("[CRASH SIMULATION] Started")
+LogInfo("[CRASH SIMULATION] Started")
 local crash_time = 5 -- Crash-specific time, which sets the increased frequency of crashes
-crash_functions.crash_simulation(
+crash_functions.random_crash_simulation(
     cg,
     nodes_activity_states,
     initial_replication,
@@ -149,6 +108,6 @@ crash_functions.crash_simulation(
     2 * crash_time
 )
 
-log_info("[REPLICATION MONITOR] Started")
+LogInfo("[REPLICATION MONITOR] Started")
 fiber.create(function(cg) replication_errors.run_replication_monitor(cg) end, cg)
 

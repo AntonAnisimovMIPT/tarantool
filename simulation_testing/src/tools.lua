@@ -1,5 +1,3 @@
-local net_box = require('net.box')
-
 local function is_follower(conn)
     return conn:call('box.info').ro == true
 end

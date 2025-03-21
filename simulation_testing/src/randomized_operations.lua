@@ -1,10 +1,5 @@
-local t = require('luatest')
-local cluster = require('luatest.replica_set')
-local server = require('luatest.server')
 local fiber = require('fiber')
-local net_box = require('net.box')
 local tools = require("tools")
-local crash_functions = require("crash_functions")
 
 
 

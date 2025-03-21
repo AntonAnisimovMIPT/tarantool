@@ -1,6 +1,7 @@
-local fio = require('fio')
 local server = require('luatest.server')
 local Proxy = require('luatest.replica_proxy')
+local fio = require('fio')
+
 
 -- Creating proxy for connection client_id -> server_id
 local function create_proxy_for_connection(cg, client_id, server_id)
@@ -65,7 +66,7 @@ local function count_non_crashed_proxy_connections(cg, i, activity_states)
             end
         end
         if not incoming_proxy then
-            log_info(string.format("Error: Proxy %s does not exist in cg.proxies", incoming_proxy_alias))
+            LogInfo(string.format("Error: Proxy %s does not exist in cg.proxies", incoming_proxy_alias))
         end
 
         if incoming_proxy and activity_states[outgoing_proxy.alias] ~= "crashed"
@@ -103,7 +104,7 @@ local function get_random_proxies_for_crash(cg, activity_states, num_to_select)
     end
 
     if #candidates < num_to_select then
-        log_info(string.format("[CRASH SIMULATION] Not enough candidates to crash. Needed: %d, available: %d", num_to_select, #candidates))
+        LogInfo(string.format("[CRASH SIMULATION] Not enough candidates to crash. Needed: %d, available: %d", num_to_select, #candidates))
         return {}
     end
 
@@ -131,7 +132,7 @@ local function get_random_proxies_for_crash(cg, activity_states, num_to_select)
     -- Check that the is_half_proxy_connections_not_crashed condition is met for each node
     for i = 1, replica_count do
         if not is_half_proxy_connections_non_crashed(cg, i, temp_activity_states) then
-            log_info(string.format("[CRASH SIMULATION] Node %d would have less than half of its connections non crashed.", i))
+            LogInfo(string.format("[CRASH SIMULATION] Node %d would have less than half of its connections non crashed.", i))
             return {}
         end
     end

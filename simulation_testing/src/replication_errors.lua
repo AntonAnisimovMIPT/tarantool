@@ -99,7 +99,7 @@ local function monitor_replication(cg)
 
             ----------------------------------------------------------------------------
             for _, leader in ipairs(leaders) do
-                log_info("[REPLICATION MONITOR][CLUSTER] Leader: "..leader)
+                LogInfo("[REPLICATION MONITOR][CLUSTER] Leader: "..leader)
             end
 
             if #leaders == 0 then
@@ -114,17 +114,17 @@ local function monitor_replication(cg)
                 table.insert(problems, '[REPLICATION MONITOR][CLUSTER] Multiple leaders detected')
             end
 
-            log_info('[REPLICATION MONITOR][CLUSTER] Detected '..tostring(#problems)..' Problems:')
+            LogInfo('[REPLICATION MONITOR][CLUSTER] Detected '..tostring(#problems)..' Problems:')
 
             if #problems > 0 then
                 for _, problem in ipairs(problems) do
-                    log_info('[REPLICATION MONITOR] '.. problem)
+                    LogInfo('[REPLICATION MONITOR] '.. problem)
                 end
             end
         end)
 
         if not ok then
-            log_error('[REPLICATION MONITOR]', err)
+            LogError('[REPLICATION MONITOR]', err)
         end
 
         fiber.sleep(monitor_config.check_interval)
